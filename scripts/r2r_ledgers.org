@@ -1,0 +1,958 @@
+#+PROPERTY: var topdir="/Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822" entity="whoi" program="r2r" projroot="847822" subpoints="00 01 02" period="ifas"
+* misc info 
+** New script specifications
+Specifications for scripts that need to be written
+*** scripts/whoi_itd_raw2jnl.sh
+#+NAME: whoi_itd_raw2cln
+#+BEGIN_SRC sh :results verbatim  :var topdir="/Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822" projroot="847822" subpoints="00 01 02" period="ifas"
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+./whoi_makefsrcsvs.pl ./data/$projnum\_itd_raw_$period.csv -e ./data/$projnum\_exi_cln_$period.csv -p ./data/$projnum\_pri_cln_$period.csv > ./data/$projnum\_itd_cln_$period.csv
+./add_metad_columns.pl ./data/$projnum\_itd_cln_$period.csv -m ./config/whoi\_cln2pp2.csv,./config/$projroot\_cln2pp2.csv,./config/$projnum\_cln2pp2.csv > ./data/$projnum\_itd_pp2_$period.csv
+./whoi_extendedfsr2journal.pl ./data/$projnum\_itd_pp2_$period.csv > ./.journal/$projnum\_itd_jnl_$period.journal
+done
+#+END_SRC
+
+*** whoi_makefsrcsvs.pl < <whoi-fsr-file>.csv -e <expcodeinfo>.csv -p <projectinfo>.csv <cleanfsrs>.csv
+**** short description
+takes a raw itd file, downloaded from whoi fsrs and create 1) a cleaned up csv w a new field for FsrExpCode and 2) a new csv file w more info about the expense codes
+**** arguments
+- -f <whoi-fsr-file>.csv is input csv file, also should take a file from standard input
+- -o <cleanfsrs>.csv is primary output file, should send output to stdout if not present
+- -e <expcodeinfo>.csv is auxillary file holding information about expense codes
+- -p <projectinfo>.csv is auxillary file holding information about the science project account extracted from first line of file
+**** input-files
+***** <whoi-fsr-file>.csv
+a financial report, in CSV format, downloaded from the WHOI financial system. Includes all iteration-to-date transactions up to the date <period>. Has possible embedded quotes in comma separated fields and has a mix of CSV record types.
+**** output-files
+***** <cleanfsrs>.csv
+a proper CSV file, cleaned up. It includes many of the same fields as the original file. It reformats some of the fields and  prepends FsrExpCode at the start of the fieldlist. Theoretically, this new CSV file could be ingested by the ledger or hledger programs. For the timebeing, however, it is destined to be processed by the scripts/whoi_itd_cln2jnl.pl scipt (see below)
+****** csv field definitions (ordered)
+- *ExpCode* - WHOI 4-digit expense code found in the report (ex. 5510)
+- *Desc* - Description of the transaction w multiple spaces compressed to one (ex. "02031 TA Aug30-Sep12 Shop Serv")
+- *Date* - Date of the transaction (ex. 2009-10-12)
+- *Ref1* - First transaction reference field (ex. ,"SHOP DIST.")
+- *Ref2* - Second transaction reference field (ex. ,"02031")
+- *PEID* - WHOI PEID (ex. "05550")
+- *Type* - WHOI PEID (ex. "ST")
+- *JobNo* - Job number that created transaction (ex. "1290385")
+- *Amount* - Amount of transaction (ex. 31.24)
+****** Example file
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------|
+| ExpCode | Desc                |       Date | Ref1     |  Ref2 | PEID     | Type |   JobNo | Amount |
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------|
+|    5170 | JPMC AMAFF 12/13 SF | 2009-10-02 | RPE07536 | 05550 | 02005573 | ST   | 1294799 | 410.00 |
+|    5170 | PCREIM SHEPHERD     | 2009-11-17 | JE023564 |       | N/A..N/A | ST   | 1305926 |  47.00 |
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------|
+***** <excodeinfo>.csv
+a proper CSV file with information about WHOI expense codes included in this summary FSR report
+****** csv field definitions (ordered)
+- *ExpCode* - WHOI 4-digit expense code found in the report (ex. 5010)
+- *ExpName* - Name of the WHOI Expense code found in the report  (ex. Salaries)
+- *ExpSubtotal* - Subtotal for expcode included in the report used to validate final journal file (Ex. 160096.87)
+****** example file
+|---------+------------------------+-------------|
+| ExpCode | ExpName                | ExpSubtotal |
+|---------+------------------------+-------------|
+|    5010 | Salaries - Regular     |    10349.23 |
+|    5130 | Graphics shop services |     1151.00 |
+|---------+------------------------+-------------|
+***** <projectinfo>.csv
+a proper CSV file with information about the WHOI project
+****** csv field definitions (ordered)
+- *ProjNum* - science project number for this fsr report extracted from FsrRepTitle (ex. 84782200)
+- *RptTitle* - Copy of first line of fsrt (ex. "Inception To Date Actuals Detail 84782200 ROLLING DECK REPOSITORY R2R  0 For the period ending January 4, 2014")
+- *RptPeriod* - date that report ends extracted from title (ex. "2014-01-04")
+- *ProjName* - name of the science project for this fsr report extracted from title (ex. "ROLLING DECK REPOSITORY R2R  0")
+- *Funder* - name of the agency providing funds for this science project
+- *ProjTotal* - total of expenses represented in this fsr file from "Account Total" row to validate against (ex.717797.05)
+****** example file
+
+**** processing
+1. cleanup whitespace, record terminator, etc (see awk script for hints)
+2. read the first line of <whoi-fsr-file> and assign values to FsrProjNum, FsrRptTitle, FsrRepPeriod, FsrProjName scalar variables
+3. calculate FsrFunder variable based on projectnumber (need to get algorithm from accounting office)
+4. skip the second line (column header definition) of the file
+5. open <cleanfsrs>.csv and <expcodeinfo>.csv and write headers w fieldnames given above
+7. Loop on remaining rows in file
+   - If it starts w "5[0-9][0-9][0-9] - "
+     - it's an expense code separater
+     - Parse first field in row and assign values to FsrExpCode and FsrExpName (from ExpCode and ExpName)
+   - ElseIf the value of field 7 is "Total"
+     - the expense code for the transactions is changing
+     - FsrExpTotal should be set to field 8 and validate as nnnnn.nn
+     - write new row to <expcodeinfo>.csv for current FsrExpCode, FsrExpName, FsrExpTotal
+   - ElseIf the value of field 7 is "Account Total"
+     - you are at the end of the report
+     - assign FsrProjTotal to value in field 8
+     - create and write header for <projectinfo>.csv using fieldname given above
+     - write single data row w FsrProjNum, FsrRptTitle, FsrRptPeriod, FsrProjName, FsrFunder, FsrProjTotal
+     - close <projectinfo>.csv, <expcodeinfo>.csv, and <cleanfsrs>.csv and exit the loop
+   - Else
+     - this is a transaction row, yay!
+     - assign values to FsrExpDesc, FsrDate, FsrRef1, FsrPEID, FsrType, FsrJobNo, FsrAmount
+       - compress whitespace to a single space for each text field and assign following variables
+       - FsrExpCode is already set from previous row
+       - FsrDesc from Desc, may have embedded quotes (for inches). accept any string and enclose in quotes
+       - FsrDate from Date, validate as form yyyy-mm-dd and do not use quotes
+       - FsrRef1 from Ref1, varies so use quotes and accept any text string.
+       - FsrRef2 from Ref2, also varies so use quotes
+       - FsrPEID from PEID, seems to always be an integer, for now create error on any non-integers and don't use quotes
+       - FsrType from Type, seems to always be "ST" but that might change. For now validate it against "ST"
+       - FsrJobNo from JobNo, validate as a 7-digit integer and don't use quotes
+       - FsrAmount from Amount, validate as nnnn.nn (no "$"" prefix)
+       - Write new row to <cleanfsrs>.csv
+   - Endif
+8. End
+*** add_metad_columns.pl < <file1>.csv -m <matchfile1>,<matchfile2>,... > <file2>.csv
+**** short description
+adds metadata columns to an input CSV based on patterns given in a sequential list of matchfiles
+**** arguments
+- <input>.csv is input csv file, also should take a file from standard input
+- -m <matchfile>.csv is a comma-separted list of files to use for assigning metadata columns to this CSV
+**** input-files
+***** <file1>.csv
+a proper csv file
+****** Example <file1>.csv represented as a table
+|--------+--------------------------------------+-------+--------+
+| ExpCod | ExpDesc                              | EmpID | Amount |
+|--------+--------------------------------------+-------+--------|
+|   5010 | Salary for week of 1/1/2014          |  1234 |  10.00 |
+|   5010 | Salary for week of 1/1/2014          |  6789 |  11.00 |
+|   5170 | Plane ticket to LAX for AMAFFEI      |   N/A | 600.00 |
+|   5170 | Hotel room in Los Angeles for Maffei |   N/A | 300.00 |
+|   5170 | PO for conference                    |  1234 | 150.00 |
+|--------+--------------------------------------+-------+--------|
+***** <matchfilen>.csv
+a csv files for matching FSR transactions and assigning columns containing metadata to them
+****** csv field definitions (ordered)
+- *M_Col1* - First to-match column
+- *M_Str1* - First to-match string
+- *M_Col2* - First to-match column
+- *M_Str2* - First to-match string (only do 2 matches for now, extend later if necc.)
+- *<metacolumn1>* - First metadata-to-add column
+- *<metacolumn2>* - FirstSecond metadata-to-add column
+- *<metacolumnN>* - Nth metadata-to-add column
+****** Example <matchfile> represented as a table
+|--------+--------+---------+---------+---------------+--------------------------|
+| M_Col1 | M_Str1 | M_Col2  |  M_Str2 | AndyView      | OrgView                  |
+|--------+--------+---------+---------+---------------+--------------------------|
+| ExpCod |   5010 | EmpID   |    1234 | Salary:Maffei | Expenses:Salary:AndrewM  |
+| ExpCod |   5010 | EmpID   |    6789 | Salary:Lerner | Expenses:Salary SteveL   |
+| ExpCod |   5170 | ExpDesc |  Maffei | Travel:Maffei | Expenses:LATrip:Hotel    |
+| ExpCod |   5170 | EmpID   |    1234 | Travel:Maffei | Expenses:LATrip:RVTECFee |
+|--------+--------+---------+---------+---------------+--------------------------|
+**** output-files
+***** <file2>.csv
+a copy of the header and all rows in <file1>.csv with a set of columns added for different types of metadata
+****** Example <file2> represented as a table
+|--------+--------------------------------------+-------+--------+---------------+--------------------------|
+| ExpCod | ExpDesc                              | EmpID | Amount | AndyView      | OrgView                  |
+|--------+--------------------------------------+-------+--------+---------------+--------------------------|
+|   5010 | Salary for week of 1/1/2014          |  1234 |  10.00 | Salary:Maffei | Expenses:Salary:AndrewM  |
+|   5010 | Salary for week of 1/1/2014          |  6789 |  11.00 | Salary:Lerner | Expenses:Salary SteveL   |
+|   5170 | Plane ticket to LAX for Maffei       |   N/A | 600.00 | Travel:Maffei | Expenses:LATrip:Plane    |
+|   5170 | Hotel room in Los Angeles for Maffei |   N/A | 300.00 | Travel:Maffei | Expenses:LATrip:Hotel    |
+|   5170 | PO for LA conference registration    |  1234 | 100.00 | Travel:Maffei | Expenses:LATrip:RVTECFee |
+|--------+--------------------------------------+-------+--------+---------------+--------------------------|
+**** processing
+1. read <file1>.csv into an in-memory hash table
+2. loop through <matchfile>.csv's (-m)
+   - read the first line (header) of the file
+   - assume that first 4 columns of the csv are always M_Col1, M_Str1, M_Col2, M_Str2
+   - columns 5-->N of header are metadata-column names
+   - one column is added to each row for each new metadata-column name
+   - loop through remaining rows of <matchfile>.csv
+     - match table entries and assign values to new columns as indicated
+     - if the value found in the metadata-column is blank do nothing to the internal representation of the row, in other words do not overwrite the old value found there
+   - next <matchfile>.csv
+3. write out <file1>.csv output file (ideally in same order it was read in)
+
+*** whoi_extendedfsr2journal.pl < <fsr-records-plus-view-metadata>.csv > <journal-file>.journal
+**** short description
+reads an extendedfsr CSV view-metadata added as columms using addmeta2csv.pl (the last step)
+**** arguments
+- <fsr-records-plus-view-metadata>.csv is input csv file, also should take a file from standard input
+**** input-files
+***** <file1fsr-records-plus-view-metadata>.csv
+a WHOI FSR CSV file that has had view-metadata columns appended to the rows
+****** Example <fsr-records-plus-view-metadata>
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------+---------------------------+----------|
+| ExpCode | Desc                |       Date | Ref1     |  Ref2 | PEID     | Type |   JobNo | Amount | AndyView                  | GBMFView |
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------+---------------------------+----------|
+|    5170 | JPMC AMAFF 12/13 SF | 2009-10-02 | RPE07536 | 05550 | 02005573 | ST   | 1294799 | 410.00 | Expenses:Travel:AMaffei   | Travel   |
+|    5170 | PCREIM SHEPHERD     | 2009-11-17 | JE023564 |       | N/A..N/A | ST   | 1305926 |  47.00 | Expenses:Travel:AShepherd | Travel   |
+|---------+---------------------+------------+----------+-------+----------+------+---------+--------+---------------------------+----------|
+**** output-files
+***** <journal-file>.journal
+a ledger-cli style journal file derved from the input CSV file
+**** processing
+
+** Science Projects Financial Directory structure
+- */finances/<entity>_<laboratory-unit>_<science-project-root>* (ex. /finances/whoi_r2r_847822)
+  - *<entity>* is the entity that books are being kept for (whoi)
+  - *<laboratory-unit>* is the laboratory trying to keep track of their finances (r2r)
+  - *<science-project-root>* is the 6-digit project root which may have subpoints attached to it as well (847822)
+** File naming syntax
+Data files are all names using the following scheme:
+*<projnum>_<data-type>_<workflow-stage>_<period><-timestamp>.<extension>*
+- *projnum* is the 8-digit WHOI project number in format nnnnnnss
+  - *nnnnnn* is base account number
+  - *ss* is account subcode
+- *data-type* is the type of data provided by FSR and other systems as csv, etc. 
+  - *fsr* is project financial summary report for a science project
+  - *itd* is iteration to date transactions for the project
+  - *phr* are the person hours charged to the project
+  - *enc* are the encumberances held against the project
+  - *ipb* combined itd, phr, and gpg (Budget) transactions
+  - *acc* are accountnames of one sort or another
+  - *exi* is expense code information
+  - *pri* is science project information
+- *workflow-stage* is the stage of processing that created the file 
+  - *emp* - nothing done, the start
+  - *dwn* - download stage
+  - *raw* - download-to-rawdata stage
+  - *cln* - cleaned-up raw CSV file w bad fields fixed
+  - *csv* - cleaned-up CSV with expcodes added as col1
+  - *mda* - metadata columns added to cln CSV file
+  - *pp9* - last post-processing stage
+  - *jnl* - journal creation stage, created by gawk
+  - *ctl* - journal creation stage, created csv2ledger
+- *period* is the period of time the data represents and is one of following
+  - *current* is for the last closed months finances
+  - *ifas* is for real-time finances
+  - *yyyymm* is for closed month as indicated
+- *-timestamp* is a timestamp in form -yyyymmdd of when data was collected
+- *extension* indicates file format as follows
+  - *html* - HTML source
+  - *csv* - comma separated values
+  - *pdf* - pdf printable format
+  - *ledger* - ledger format
+
+** test shell variable passing
+In the following script we test variable passing. This section can go away eventually.
+#+NAME: test_shell_variable_passing
+#+BEGIN_SRC sh :results verbatim :var period="ifas" fsrurlprefix="http://fsr2.whoi.edu/servlet/fsrreport/ifas/2/grp/JL/" httpuser="arm" httppass="Wh135=justfine" downloadresults="~/Downloads"
+
+ddir=$topdir/downloads
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+echo $projnum
+done
+
+#+END_SRC
+
+#+RESULTS: test_shell_variable_passing
+: 84782200
+: 84782201
+: 84782202
+
+* dwn: download WHOI project FSR (fsr) and transaction detail (itd) detail
+FSR reports display the state of an account at various points in time.
+In this code block we gather various formats for both the summary FSR report and
+the detailed transactions.
+#+NAME: dwn_fsritd
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine" 
+
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# Downloads
+
+#FSR summary in PDF and CSV
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrmakepdf/$period/2/grp/JL/$projnum.pdf?method=report -O ./downloads/pdf/$projnum\_fsr_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrreport/$period/2/grp/JL/$projnum.csv -O ./downloads/$projnum\_fsr_dwn_$period\-$datestring.csv
+sleep 5
+
+# FSR ITD detail in PDF and CSV
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=itd -O ./downloads/pdf/$projnum\_itd_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=itd -O ./downloads/$projnum\_itd_dwn_$period\-$datestring.csv
+sleep 5
+
+echo "downloaded $projnum FSR summary and ITD files for period $period on date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn_fsritd
+: downloaded 84782200 FSR summary and ITD files for period ifas on date 20140211
+: downloaded 84782201 FSR summary and ITD files for period ifas on date 20140211
+: downloaded 84782202 FSR summary and ITD files for period ifas on date 20140211
+
+* dwn: download WHOI people hours (phr) detail
+Information on hours charged to a project is posted monthly. There is no singly report
+that provides all the monthly hours charged to a project. Therefore in the code
+block below we gather the reports for every month. This script can be optimized
+to only gather months up until the current month at some point.
+#+NAME: dwn_phr
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine" year=2014
+
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+#FSR PHR detail in CSV
+#for i in 01 02 03 04 05 06 07 08 09 10 11 12
+for i in 01 02
+do
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$year$i/2/grp/JL/$projnum.pdf?col=ppi -O ./downloads/pdf/$projnum\_phr_dwn_$year$i\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$year$i/2/grp/JL/$projnum.csv?col=ppi -O ./downloads/$projnum\_phr_dwn_$year$i\-$datestring.csv
+sleep 5
+done
+
+echo "downloaded $projnum PHR info on date $datestring"
+
+done
+#+END_SRC
+
+#+RESULTS: dwn_phr
+: downloaded 84782200 PPI info on date 20140211
+: downloaded 84782201 PPI info on date 20140211
+: downloaded 84782202 PPI info on date 20140211
+
+* dwn: download WHOI funds allocated (gpg) and encumberance (enc) detail
+This code block downloads budget and encumberance details for the project. We use "ifas" as the
+period but it appears that any period returns the same results -- an ITD list
+of budget entries from the start of the project.
+#+NAME: dwn_gpgen
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine"
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# Budget details
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=gbg -O ./downloads/pdf/$projnum\_gpg_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=gbg -O ./downloads/$projnum\_gpg_dwn_$period\-$datestring.csv
+sleep 5
+
+# Encumberance details
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=en -O ./downloads/pdf/$projnum\_enc_dwn_$period\-$datestring.pdf
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=en -O ./downloads/$projnum\_enc_dwn_$period\-$datestring.csv
+
+echo "downloaded $projnum Budget and Encumberance info on date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn_gpgen
+: downloaded 84782200 Budget and Encumberance info on date 20140211
+: downloaded 84782201 Budget and Encumberance info on date 20140211
+: downloaded 84782202 Budget and Encumberance info on date 20140211
+
+* raw: transform specified downloaded data (from dwn phase) to data directory files (raw)
+Here we update all the raw files in the data directory with fresh versions.
+#+NAME: dwn2raw
+#+BEGIN_SRC sh :results verbatim :var datestring=20140211
+
+# IMPORTANT!!!!!!!!!! --> SET DATESTRING BEFORE EXECUTING THIS!!!!!!!
+
+# Need to make sure that data for today has been downloaded since this script
+# picks up data collected on todays date
+
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# copy fsr summary and detail files up one level
+cp ./downloads/$projnum\_fsr\_dwn_$period\-$datestring.csv ./data/$projnum\_fsr_raw.csv
+cp ./downloads/$projnum\_itd\_dwn_$period\-$datestring.csv ./data/$projnum\_itd_raw.csv
+cp ./downloads/$projnum\_enc\_dwn_$period\-$datestring.csv ./data/$projnum\_enc_raw.csv
+cp ./downloads/$projnum\_gpg\_dwn_$period\-$datestring.csv ./data/$projnum\_gpg_raw.csv
+
+# concatenate all the phr files we have into one phr file
+# TODO - Need to improve this algorithm so duplicate file not copied for phr file
+cat ./downloads/$projnum\_phr_dwn_201[34][0-1][0-9]-*.csv > ./data/$projnum\_phr_raw.csv
+
+echo "copied $projnum data from period $period downloaded files to data dir date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn2raw
+: copied 84782200 data from period ifas downloaded files to data dir date 20140211
+: copied 84782201 data from period ifas downloaded files to data dir date 20140211
+: copied 84782202 data from period ifas downloaded files to data dir date 20140211
+
+* cln: copy the raw (raw) data files into clean (cln) data files
+For the time being we basically copy the raw files to cooked files.
+In the future each of the raw files, downloaded from the accounting system
+will be transformed into a CSV capable of being imported into the ledger
+software, attaching a UUID to each transaction as it is created. The
+difficutly at present is that multiple virtual accounts have to be assigned
+to each transaction. gawk is a better tool for this currently.
+
+#+NAME: raw2cln
+#+BEGIN_SRC sh :results verbatim
+
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# for now just copy raw files to processed (cln) files
+cp ./data/$projnum\_fsr_raw.csv ./data/$projnum\_fsr_cln.csv
+cp ./data/$projnum\_itd_raw.csv ./data/$projnum\_itd_cln.csv
+cp ./data/$projnum\_phr_raw.csv ./data/$projnum\_phr_cln.csv
+cp ./data/$projnum\_enc_raw.csv ./data/$projnum\_enc_cln.csv
+cp ./data/$projnum\_gpg_raw.csv ./data/$projnum\_gpg_cln.csv
+
+date; echo "raw2cln performed for $projnum"
+
+done
+
+#+END_SRC
+
+#+RESULTS: raw2cln
+: Tue Feb 11 17:56:20 EST 2014
+: raw2cln performed for 84782200
+: Tue Feb 11 17:56:20 EST 2014
+: raw2cln performed for 84782201
+: Tue Feb 11 17:56:20 EST 2014
+: raw2cln performed for 84782202
+
+* gawk cooked data files into ledger-compatible transactions
+In this step we create ledger-compatible journal files from the cooked
+data files and place them in the journals subdirectory. A series of project-specific
+gawk scripts, sitting in the scripts directory, are used for this purpose. At some
+point we may want to have a global gawk script that calls a local gawk script at
+the end of it.
+- be sure to look at https://github.com/quentinsf/icsv2ledger for more ideas about how to convert csvs to the journal files we wish to create. Perhaps extend it to use virtual accounts
+- this too - https://github.com/cantino/reckon
+- and this - https://github.com/bhutley/bank-csv-to-ledger
+- and wiegley's -- https://github.com/jwiegley/CSV2Ledger
+- that was copied from here -- http://bazaar.launchpad.net/~rladams/csv2ledger/main/files
+
+
+#+NAME: cln2jnl
+#+BEGIN_SRC sh :results verbatim
+# Go to the datadirectory
+cd $topdir
+date
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# ITD file into ledger file and sort journal
+gawk -f ./scripts/$projroot\_itd_cln2jnl.awk ./data/$projnum\_itd_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_itd_jnl.journal
+
+# PHR file into ledger file and sort journal
+gawk --file=./scripts/$projroot\_phr_cln2jnl.awk ./data/$projnum\_phr_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_phr_jnl.journal
+
+# GPG file into ledger file and sort journal
+gawk --file=./scripts/$projroot\_gpg_cln2jnl.awk ./data/$projnum\_gpg_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_gpg_jnl.journal
+
+# GPG file into ledger file and sort journal
+gawk --file=./scripts/$projroot\_enc_cln2jnl.awk ./data/$projnum\_enc_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_enc_jnl.journal
+gawk --file=./scripts/$projroot\_enc_cln2jnl.awk ./data/$projnum\_enc_cln.csv | ledger print --file - --sort d 
+
+
+# Combine all 3 into a single (i)nception-to-date + (p)eople + (b)udger transaction file
+cat ./journals/$projnum\_{itd,gpg,phr}_jnl.journal > ./journals/$projnum\_ipb_jnl.journal
+
+echo "ledger files created for $projnum"
+
+done
+
+# Create projroot ledger files and sort 
+cat ./journals/$projroot[0-9][0-9]_itd_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_itd_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_phr_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_phr_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_gpg_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_gpg_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_ipb_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_ipb_jnl.journal
+echo "concatenated ledger files"
+
+# Create new accounts file listing all accounts used
+ledger --file ./journals/$projroot\_itd_jnl.journal accounts | sed -e "s/^/account /" | sort > ./journals/$projroot\_acc_jnl.journal
+#+END_SRC
+
+#+RESULTS: cln2jnl
+: Tue Feb 11 18:09:27 EST 2014
+: ledger files created for 84782200
+: ledger files created for 84782201
+: ledger files created for 84782202
+: concatenated ledger files
+
+#+NAME: cln2jnl2
+#+BEGIN_SRC sh :results verbatim
+# Go to the datadirectory
+cd $topdir
+date
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# ITD file into ledger file and sort journal
+#gawk -f ./scripts/$projroot\_itd_cln2jnl.awk ./data/$projnum\_itd_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_itd_jnl.journal
+
+# PHR file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_phr_cln2jnl.awk ./data/$projnum\_phr_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_phr_jnl.journal
+
+# GPG file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_gpg_cln2jnl.awk ./data/$projnum\_gpg_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_gpg_jnl.journal
+
+# GPG file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_enc_cln2jnl.awk ./data/$projnum\_enc_cln.csv | ledger print --file - --sort d > ./journals/$projnum\_enc_jnl.journal
+gawk --file=./scripts/$projroot\_enc_cln2jnl.awk ./data/$projnum\_enc_cln.csv | ledger print --file - --sort d 
+
+
+# Combine all 3 into a single (i)nception-to-date + (p)eople + (b)udger transaction file
+cat ./journals/$projnum\_{itd,gpg,phr}_jnl.journal > ./journals/$projnum\_ipb_jnl.journal
+
+echo "ledger files created for $projnum"
+
+done
+
+# Create projroot ledger files and sort 
+cat ./journals/$projroot[0-9][0-9]_itd_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_itd_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_phr_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_phr_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_gpg_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_gpg_jnl.journal
+cat ./journals/$projroot[0-9][0-9]_ipb_jnl.journal | ledger print --file - --sort d > ./journals/$projroot\_ipb_jnl.journal
+echo "concatenated ledger files"
+
+# Create new accounts file listing all accounts used
+ledger --file ./journals/$projroot\_itd_jnl.journal accounts | sed -e "s/^/account /" | sort > ./journals/$projroot\_acc_jnl.journal
+#+END_SRC
+
+* -->csv: cleanup the raw (raw) data files into clean proper CSV (csv) files
+For the time being we take the raw downloaded file and transform it
+into a csv file that is properly formatted for ingestion using the "ledger import"
+command
+
+#+NAME: raw2cln2
+#+BEGIN_SRC sh :results verbatim
+
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# create clean (cln) files compatible with ledger convert
+gawk -f ./scripts/$projroot\_itd_raw2cln.awk ./data/$projnum\_itd_raw.csv > ./data/$projnum\_itd_csv.csv
+
+date; echo "raw2cln2 performed for $projnum"
+
+done
+
+#+END_SRC
+
+#+RESULTS: raw2cln2
+: Tue Feb 11 17:21:39 EST 2014
+: raw2cln2 performed for 84782200
+: Tue Feb 11 17:21:39 EST 2014
+: raw2cln2 performed for 84782201
+: Tue Feb 11 17:21:39 EST 2014
+: raw2cln2 performed for 84782202
+* -->mda: take clean (cln) files and add views as metadata columns (mda)
+** WHOI View match tables
+Match columns are ledger matchcolu
+*** WHOI NSFView defaults
+copy this to /Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822/config/WHOI_NSFView_default_matches.csv
+#+NAME WHOI_NSFView_default_matches.csv
+|---------+--------+--------+--------+-------------------------------------+------------------------------------------------------------------------|
+| M_Col1  | M_Str1 | M_Col2 | M_Str2 | WHOIView                            | NSFView                                                                |
+|---------+--------+--------+--------+-------------------------------------+------------------------------------------------------------------------|
+| ExpCode |      * |        |        | 9999 Unassigned                     | Z. Unassigned                                                          |
+| ExpCode |   5010 |        |        | 5010 Salaries - Regular             | C. Total Salary and Benefits                                           |
+| ExpCode |   5012 |        |        | 5012 Salaries-Paid Absences         | C. Total Salary and Benefits                                           |
+| ExpCode |   5015 |        |        | 5015 Salaries-Casual                | C. Total Salary and Benefits                                           |
+| ExpCode |   5050 |        |        | 5050 Fringe Benefits Regular        | C. Total Salary and Benefits                                           |
+| ExpCode |   5054 |        |        | 5054 Fringe Benefits-Casual         | C. Total Salary and Benefits                                           |
+| ExpCode |   5060 |        |        | 5060 Lab Costs Regular              | I. Indirect Costs:1. Lab Costs                                         |
+| ExpCode |   5066 |        |        | 5066 Laboratory Costs - Casual      | I. Indirect Costs:1. Lab Costs                                         |
+| ExpCode |   5100 |        |        | 5100 Elec/Mech/Carp. shop services  | G. Other Direct Costs:3. Shop Services                                 |
+| ExpCode |   5130 |        |        | 5130 Graphics shop services         | G. Other Direct Costs:2. Publication                                   |
+| ExpCode |   5170 |        |        | 5170 Travel - Domestic              | E. Travel:1. Domestic                                                  |
+| ExpCode |   5171 |        |        | 5171 Train Seminar fees on&off site | E. Travel:3. Seminar Fees                                              |
+| ExpCode |   5180 |        |        | 5180 Travel - International         | E. Travel:2. Foreign                                                   |
+| ExpCode |   5190 |        |        | 5190 Equipment                      | D. Equipment                                                           |
+| ExpCode |   5200 |        |        | 5200 Membership Fees                | G. Other Direct Costs:6. Other:Membership Fees                         |
+| ExpCode |   5210 |        |        | 5210 Supplies                       | G. Other Direct Costs:1. Materials and Supplies                        |
+| ExpCode |   5211 |        |        | 5211 Computer Software              | G. Other Direct Costs:1. Materials and Supplies                        |
+| ExpCode |   5212 |        |        | 5212 Computer Supples               | G. Other Direct Costs:1. Materials and Supplies                        |
+| ExpCode |   5220 |        |        | 5220 Books & Publications           | G. Other Direct Costs:6. Other:Books and Publications                  |
+| ExpCode |   5250 |        |        | 5250 Stockroom Supplies             | G. Other Direct Costs:1. Materials and Supplies                        |
+| ExpCode |   5290 |        |        | 5290 Meals                          | G. Other Direct Costs:6. Other:Meals                                   |
+| ExpCode |   5310 |        |        | 5310 Other Outside Services         | G. Other Direct Costs:5. Subawards:Unassigned                          |
+| ExpCode |   5320 |        |        | 5320 Consulting Services            | G. Other Direct Costs:3. Consultant Services                           |
+| ExpCode |   5360 |        |        | 5360 Communications                 | G. Other Direct Costs:6. Other:Communications                          |
+| ExpCode |   5370 |        |        | 5370 Shipping & Postage             | G. Other Direct Costs:6. Other:Shipping and Postage                    |
+| ExpCode |   5389 |        |        | 5389 Miscellaneous In-house Service | G. Other Direct Costs:6. Other:Misc In-house Service                   |
+| ExpCode |   5390 |        |        | 5390 Printing & Binding             | G. Other Direct Costs:2. Publication Costs/Documentation/Dissemination |
+| ExpCode |   5410 |        |        | 5410 Miscellaneous                  | G. Other Direct Costs:6. Other:Miscellaneous                           |
+| ExpCode |   5430 |        |        | 5430 Duplicating                    | G. Other Direct Costs:6. Other:Duplicating                             |
+| ExpCode |   5510 |        |        | 5510 Technical Assistance           | G. Other Direct Costs:4. Computer Services                             |
+| ExpCode |   5550 |        |        | 5550 Publication Costs              | G. Other Direct Costs:2. Publication Costs                             |
+| ExpCode |   5750 |        |        | 5750 Guest Payments                 | F. Participant Support Costs                                           |
+| ExpCode |   5960 |        |        | 5960 G & A Regular                  | I. Indirect Costs:2. General and Administrative                        |
+| ExpCode |   5970 |        |        | 5970 Cost Sharing                   | M. Cost Sharing                                                        |
+| ExpCode |   5966 |        |        | 5966 G&A Overhead-Casual            | I. Indirect Costs:2. General and Administrative                        |
+|---------+--------+--------+--------+-------------------------------------+------------------------------------------------------------------------|
+*** WHOI GBMFView_defaults
+copy this to /Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822/config/WHOI_GBMFView_default_matches.csv
+#+NAME WHOI_GBMFView_default_matches.csv
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------------------------|
+| M_Col1  | M_Str1 | M_Col2 | M_Str2 | WHOIView                            | GBMFView                                               |
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------------------------|
+| ExpCode |      * |        |        | 0000 Unassigned                     | Unassigned                                             |
+| ExpCode |   5010 |        |        | 5010 Salaries - Regular             | Labor and Benefits                                     |
+| ExpCode |   5012 |        |        | 5012 Salaries-Paid Absences         | Labor and Benefits                                     |
+| ExpCode |   5015 |        |        | 5015 Salaries-Casual                | Labor and Benefits                                     |
+| ExpCode |   5050 |        |        | 5050 Fringe Benefits Regular        | Labor and Benefits                                     |
+| ExpCode |   5054 |        |        | 5054 Fringe Benefits-Casual         | Labor and Benefits                                     |
+| ExpCode |   5060 |        |        | 5060 Lab Costs Regular              | Indirect Costs:Lab Costs                               |
+| ExpCode |   5066 |        |        | 5066 Laboratory Costs - Casual      | Indirect Costs:Lab Costs                               |
+| ExpCode |   5100 |        |        | 5100 Elec/Mech/Carp. shop services  | Other Direct Costs:Other:Shop                          |
+| ExpCode |   5130 |        |        | 5130 Graphics shop services         | Other Direct Costs:Other:Shop                          |
+| ExpCode |   5170 |        |        | 5170 Travel - Domestic              | Travel:Domestic:Unassigned                             |
+| ExpCode |   5171 |        |        | 5171 Train Seminar fees on&off site | Travel:Domestic:SeminarFee                             |
+| ExpCode |   5180 |        |        | 5180 Travel - International         | Travel:International:Unassigned                        |
+| ExpCode |   5190 |        |        | 5190 Equipment                      | Equipment:Unassigned                                   |
+| ExpCode |   5200 |        |        | 5200 Membership Fees                | Other Direct Costs:Other:Membership Fees               |
+| ExpCode |   5210 |        |        | 5210 Supplies                       | Other Direct Costs:Materials and Supplies              |
+| ExpCode |   5211 |        |        | 5211 Computer Software              | Other Direct Costs:Materials and Supplies:CompSoftware |
+| ExpCode |   5212 |        |        | 5212 Computer Supples               | Other Direct Costs:Materials and Supplies:CompSupplies |
+| ExpCode |   5220 |        |        | 5220 Books & Publications           | Other Direct Costs:Materials and Supplies:Books        |
+| ExpCode |   5250 |        |        | 5250 Stockroom Supplies             | Other Direct Costs:Materials and Supplies:Stockroom    |
+| ExpCode |   5290 |        |        | 5290 Meals                          | Other Direct Costs:Other:Meals                         |
+| ExpCode |   5310 |        |        | 5310 Other Outside Services         | Other Direct Costs:Other:OtherOutServ                  |
+| ExpCode |   5320 |        |        | 5320 Consulting Services            | Other Direct Costs:Other:OtherOutServ                  |
+| ExpCode |   5360 |        |        | 5360 Communications                 | Other Direct Costs:Other:Communications                |
+| ExpCode |   5370 |        |        | 5370 Shipping & Postage             | Other Direct Costs:Other:Shipping                      |
+| ExpCode |   5389 |        |        | 5389 Miscellaneous In-house Service | Other Direct Costs:Other:MiscInhouseServ               |
+| ExpCode |   5390 |        |        | 5390 Printing & Binding             | Other Direct Costs:Other:Printing                      |
+| ExpCode |   5410 |        |        | 5410 Miscellaneous                  | Other Direct Costs:Other:Misc                          |
+| ExpCode |   5430 |        |        | 5430 Duplicating                    | Other Direct Costs:Other:Duplicating                   |
+| ExpCode |   5510 |        |        | 5510 Technical Assistance           | Other Direct Costs:Computer Services                   |
+| ExpCode |   5550 |        |        | 5550 Publication Costs              | Other Direct Costs:Other:PubCosts                      |
+| ExpCode |   5750 |        |        | 5750 Guest Payments                 | Other Direct Costs:GuestPayments                       |
+| ExpCode |   5960 |        |        | 5960 G & A Regular                  | Indirect Costs:GandA                                   |
+| ExpCode |   5966 |        |        | 5966 G&A Overhead-Casual            | Indirect Costs:GandA                                   |
+| ExpCode |   5970 |        |        | 5970 Cost Sharing                   | Cost Sharing                                           |
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------------------------|
+*** AndyView defaults
+#+NAME WHOI_AndyView_default_matches.csv
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------|
+| M_Col1  | M_Str1 | M_Col2 | M_Str2 | WHOIView                            | AndyView                             |
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------|
+| ExpCode |      * |        |        | 0000 Unassigned                     | Expenses:Unassigned                  |
+| ExpCode |   5010 |        |        | 5010 Salaries - Regular             | Expenses:Salary:Regular              |
+| ExpCode |   5012 |        |        | 5012 Salaries-Paid Absences         | Expenses:Salary:PaidAbsence          |
+| ExpCode |   5015 |        |        | 5015 Salaries-Casual                | Expenses:Salary:Casual               |
+| ExpCode |   5050 |        |        | 5050 Fringe Benefits Regular        | Expenses:Salary:BenefitsRegular      |
+| ExpCode |   5054 |        |        | 5054 Fringe Benefits-Casual         | Expenses:Salary:BenifitsCasual       |
+| ExpCode |   5060 |        |        | 5060 Lab Costs Regular              | Expenses:Salary:LabCostsRegular      |
+| ExpCode |   5066 |        |        | 5066 Laboratory Costs - Casual      | Expenses:Salary:LabCostsCasual       |
+| ExpCode |   5100 |        |        | 5100 Elec/Mech/Carp. shop services  | Expenses:Other:ElecMechCarp          |
+| ExpCode |   5130 |        |        | 5130 Graphics shop services         | Expenses:Other:Graphics              |
+| ExpCode |   5170 |        |        | 5170 Travel - Domestic              | Expenses:Travel:Unassigned           |
+| ExpCode |   5171 |        |        | 5171 Train Seminar fees on&off site | Expenses:Other:Training              |
+| ExpCode |   5180 |        |        | 5180 Travel - International         | Expenses:Travel:Unassigned           |
+| ExpCode |   5190 |        |        | 5190 Equipment                      | Expenses:Equipment:Unassigned        |
+| ExpCode |   5200 |        |        | 5200 Membership Fees                | Expenses:Other:Membership Fees       |
+| ExpCode |   5210 |        |        | 5210 Supplies                       | Expenses:Supplies:Misc               |
+| ExpCode |   5211 |        |        | 5211 Computer Software              | Expenses:Supplies:Computer Software  |
+| ExpCode |   5212 |        |        | 5212 Computer Supples               | Expenses:Supplies:Computer Supplies  |
+| ExpCode |   5220 |        |        | 5220 Books & Publications           | Expenses:Other:Books                 |
+| ExpCode |   5250 |        |        | 5250 Stockroom Supplies             | Expenses:Other:Stockroom             |
+| ExpCode |   5290 |        |        | 5290 Meals                          | Expenses:Other:Meals                 |
+| ExpCode |   5310 |        |        | 5310 Other Outside Services         | Expenses:Outside Services:Unassigned |
+| ExpCode |   5320 |        |        | 5320 Consulting Services            | Expenses:Outside Servixes:Unassigned |
+| ExpCode |   5360 |        |        | 5360 Communications                 | Expenses:Other:Communications        |
+| ExpCode |   5370 |        |        | 5370 Shipping & Postage             | Expenses:Other:Shipping              |
+| ExpCode |   5389 |        |        | 5389 Miscellaneous In-house Service | Expenses:Other:MiscInhouseServ       |
+| ExpCode |   5390 |        |        | 5390 Printing & Binding             | Expenses:Other:Printing              |
+| ExpCode |   5410 |        |        | 5410 Miscellaneous                  | Expenses:Other:Misc                  |
+| ExpCode |   5430 |        |        | 5430 Duplicating                    | Expenses:Other:Duplicating           |
+| ExpCode |   5510 |        |        | 5510 Technical Assistance           | Expenses:Salary:TA                   |
+| ExpCode |   5550 |        |        | 5550 Publication Costs              | Expenses:Other:PubCosts              |
+| ExpCode |   5750 |        |        | 5750 Guest Payments                 | Expenses:GuestPayments               |
+| ExpCode |   5960 |        |        | 5960 G & A Regular                  | Expenses:Salary:GandA                |
+| ExpCode |   5966 |        |        | 5966 G&A Overhead-Casual            | Expenses:Salary:GandA                |
+| ExpCode |   5970 |        |        | 5970 Cost Sharing                   | Expenses:CostSharing                 |
+|---------+--------+--------+--------+-------------------------------------+--------------------------------------|
+*** Andy Projects (General)
+#+NAME WHOI_AndyProj_genview_matches.csv
+|---------+--------+--------+-----------------+--------------------------+---------------------------------------+---------|
+| M_Col1  | M_Str1 | M_Col2 | M_Str2          | AndyView                 | GBMFView                              | NSFView |
+|---------+--------+--------+-----------------+--------------------------+---------------------------------------+---------|
+| ExpCode |   5170 | Desc   | AMAFF           | Travel:AndyM             | Travel:Domestic:AndyM                 |         |
+| ExpCode |   5170 | Desc   | MAFFEI          | Travel:AndyM             | Travel:Domestic:AndyM                 |         |
+| ExpCode |   5170 | Desc   | CCHAN           | Travel:CyndyC            | Travel:Domestic:CyndyC                |         |
+| ExpCode |   5170 | Desc   | STOLP           | Travel:LauraS            | Travel:Domestic:LauraS                |         |
+| ExpCode |   5170 | Desc   | RARKO           | Travel:BobA              | Travel:Domestic:BobA                  |         |
+| ExpCode |   5170 | Desc   | JFUTR           | Travel:JoeF              | Travel:Domestic:JoeF                  |         |
+| ExpCode |   5170 | Desc   | FUTRELLE        | Travel:JoeF              | Travel:Domestic:JoeF                  |         |
+| ExpCode |   5170 | Desc   | SOSIK, HEIDI    | Travel:HeidiS            | Travel:Domestic:HeidiS                |         |
+| ExpCode |   5170 | Desc   | HSOSI/PT        | Travel:HeidiS            | Travel:Domestic:HeidiS                |         |
+| ExpCode |   5170 | Desc   | JPMC HSOSI      | Travel:HeidiS            | Travel:Domestic:HeidiS                |         |
+| ExpCode |   5170 | Desc   | HONIG, PETER    | Travel:PeterH            | Travel:Domestic:PeterH                |         |
+| ExpCode |   5170 | Desc   | FOX, PETER      | Travel:PeterF            | Travel:Domestic:PeterF                |         |
+| ExpCode |   5170 | Desc   | WEST, PATRICK   | Travel:PatrickW          | Travel:Domestic:PatrickW              |         |
+| ExpCode |   5170 | Desc   | SINGH, HANUMAN  | Travel:HanuS             | Travel:Domestic:HanuS                 |         |
+| ExpCode |   5170 | Desc   | HSING           | Travel:HanuS             | Travel:Domestic:HanuS                 |         |
+| ExpCode |   5170 | Desc   | YORK, AMBER     | Travel:AmberY            | Travel:Domestic::AmberY               |         |
+| ExpCode |   5170 | Desc   | PRASAD, LAKSHM  | Travel:LakshmanP         | Travel:Domestic:LakshmanP             |         |
+| ExpCode |   5170 | Desc   | LPRAS           | Travel:LakshmanP         | Travel:Domestic:LakshmanP             |         |
+| ExpCode |   5170 | Desc   | COBURN, ELIZABE | Travel:LizaC             | Travel:Domestic:LizaC                 |         |
+| ExpCode |   5170 | Desc   | CNOBR           | Travel:CarolinaN         | Travel:Domestic:CarolinaN             |         |
+| ExpCode |   5170 | Desc   | CSELL           | Travel:CindyS            | Travel:Domestic:CindyS                |         |
+| ExpCode |   5170 | Desc   | CHANDLER, CYNTH | Travel:CarolinaN         | Travel:Domestic:CarolinaN             |         |
+| ExpCode |   5170 | Desc   | NOBRE, CAROLINA | Travel:CarolinaN         | Travel:Domestic:CarolinaN             |         |
+| ExpCode |   5170 | Desc   | SLEEPY HOLLOW   | Travel:LakshmanP         | Travel:Domestic:LakshmanP             |         |
+| ExpCode |   5171 | Desc   | JFUTR           | Travel:JoeF:SeminarFee   | Travel:Domestic:JoeF:SeminarFee       |         |
+| ExpCode |   5171 | Desc   | AMAFF           | Travel:AndyM:SeminarFee  | Travel:Domestic:AndyM:SeminarFee      |         |
+| ExpCode |   5171 | Desc   | CSELL           | Travel:CindyS:SeminarFee | Travel:Domestic:CindyS:SeminarFee     |         |
+| ExpCode |   5171 | Desc   | ASTON           | Travel:AnnS:SeminarFee   | Travel:Domestic:AnnS:SeminarFee       |         |
+| ExpCode |   5180 | Desc   | AMAFF           | Travel:AndyM             | Travel:International:AndyM            |         |
+| ExpCode |   5180 | Desc   | MAFFEI          | Travel:AndyM             | Travel:International:AndyM            |         |
+| ExpCode |   5180 | Desc   | JFUTR           | Travel:JoeF              | Travel:International:JoeF             |         |
+| ExpCode |   5180 | Desc   | FUTRELLE        | Travel:JoeF              | Travel:International:JoeF             |         |
+| ExpCode |   5180 | Desc   | HSOSI           | Travel:HeidiS            | Travel:International:HeidiS           |         |
+| ExpCode |   5510 | PEID   | 05550           | Salary:TA:AndyM          | Other Direct Costs:Computer Svc:AndyM |         |
+|         |        |        |                 |                          |                                       |         |
+|---------+--------+--------+-----------------+--------------------------+---------------------------------------+---------|
+*** AndyProject (Detailed)
+#+NAME WHOI_AndyView_detview_matches.csv
+|---------+--------+--------+----------+-------------------------|
+| M_Col1  | M_Str1 | M_Col2 | M_Str2   | AndyView                |
+|---------+--------+--------+----------+-------------------------|
+| ExpCode |   5170 | Ref1   | RPE07536 | Travel:AndyM:AGU2009    |
+| ExpCode |   5170 | Ref1   | JE023564 | Travel:AdamS:Nov2009    |
+| ExpCode |   5170 | Ref1   | RPE07162 | Travel:CyndyC:RVTEC2009 |
+| ExpCode |   5170 | Ref1   | RP062318 | Travel:CyndyC:RVTEC2009 |
+| ExpCode |   5170 | Ref1   | RP062319 | Travel:CyndyC:RVTEC2009 |
+| ExpCode |   5170 | Ref1   | RP062439 | Travel:AndyM:RVTEC2009  |
+| ExpCode |   5170 | Ref1   | RP062440 | Travel:AndyM:RVTEC2009  |
+| ExpCode |   5170 | Ref1   | RP062441 | Travel:AndyM:RVTEC2009  |
+| ExpCode |   5170 | Ref1   | RP062442 | Travel:AndyM:RVTEC2009  |
+| ExpCode |   5170 | Ref1   | RP062443 | Travel:AndyM:AGU2009    |
+| ExpCode |   5170 | Ref1   | RP062440 | Travel:AndyM:AGU2009    |
+| ExpCode |   5170 | Ref1   | RPE07536 | Travel:AndyM:AGU2010    |
+| ExpCode |   5170 | Ref1   | RP063787 | Travel:AndyM:Feb2010    |
+| ExpCode |   5170 | Ref1   | RP063788 | Travel:AndyM:Feb2010    |
+| ExpCode |   5170 | Ref1   | RP063789 | Travel:AndyM:Feb2010    |
+| ExpCode |   5170 | Ref1   | RP062440 | Travel:AndyM:Feb2010    |
+| ExpCode |   5171 | Desc   | JFUTR    | Travel:JoeF:SeminarFee  |
+| ExpCode |   5180 | Desc   | AMAFF    | Travel:AndyM            |
+| ExpCode |   5510 | PEID   | 05550    | Salary:TA:AndyM         |
+|         |        |        |          |                         |
+|         |        |        |          |                         |
+|---------+--------+--------+----------+-------------------------|
+Unfortunately the WHOI FSR rows do not have a unique col for transaction-ids. Some of the above matches may cause incorrect results
+*** WHOI Project Grants
+#+NAME WHOIPrSourcePrefix
+|----------+--------|
+|   Prefix | Agency |
+|----------+--------|
+| 84xxxxxx | NSF    |
+| 25xxxxxx |        |
+|----------+--------|
+
+** Add the metadata
+#+NAME: add_metad_columns
+#+BEGIN_SRC sh :results verbatim
+# Go to the datadirectory
+cd $topdir
+date
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# ITD file into ledger file and sort journal
+./scripts/add_metad_columns.pl -i ./data/84782200_itd_cln.csv -o ./data/84782200_itd_mda.csv -m ./config/WHOI_AndyView_default_matches.csv
+# cat  ./data/$projnum\_itd_mda.csv
+
+echo "metadata added for $projnum csvs"
+
+done
+#+END_SRC
+
+#+RESULTS: add_metad_columns
+: Thu Feb  6 13:53:59 EST 2014
+: metadata added for 84782200 csvs
+: metadata added for 84782201 csvs
+: metadata added for 84782202 csvs
+
+* -->c2l: CSV2Ledger.pl processing
+** Script options
+Options:
+ -i <file>                Input filename
+ -o <file>                Output filename
+ -D <directory>           Base directory for output files
+ -r "regexp"              Record matching RE
+ -c "label,label,<...>"   Field label list
+ -d "label"               Date field label
+ -n "label"               Check Number field label
+ -t "label"               Description field label
+ -a "label"               Amount field label
+ -x                       Mark transactions cleared
+ -g                       Negate the transaction amount
+ -z                       Turn on duplicate detection (SLOW)
+ -X                       Turn on file location
+ -G <directory>           Source directory for files search
+ -s "Account"             Default Source Account
+ -F #                     Fuzzy match file dates by X days (3 default)
+ -f <file>                File matching table YAML file
+ -p <file>                Preprocess table YAML file
+ -m <file>                Account matching table YAML file
+ -M <file>                MD5 sum cache
+ -E KEY=VALUE             Add metadata
+** do the work
+#+NAME: mda2jou
+#+BEGIN_SRC sh :results verbatim
+# Go to the datadirectory
+cd $topdir
+date
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# ITD file into ledger file and sort journal
+./scripts/CSV2ledger.pl -i ./data/$projnum\_itd_mda.csv -o ./data/$projnum\_itd_c2l.journal -d "Date" -t "TRXDesc" -a "Amount" -f ./config/FileMatches.yaml -p ./config/PreProcess.yaml -m AccountMatches.yaml
+
+echo "ledger files created for $projnum"
+
+done
+
+#+END_SRC
+
+#+RESULTS: mda2jou
+: Thu Feb  6 15:52:13 EST 2014
+: ledger files created for 84782200
+: ledger files created for 84782201
+: ledger files created for 84782202
+
+* report hours people worked on project 
+#+NAME rep_hours
+#+BEGIN_SRC sh :results verbatim :var projnum=847822
+ledger --file $topdir/journals/$projnum\_phr_jnl.journal bal
+#+END_SRC
+
+#+RESULTS:
+
+* report balance of funds on project
+#+NAME rep_AndyView
+#+BEGIN_SRC sh :results verbatim :var depth=3
+
+for i in $subpoints
+do
+projnum=$projroot$i
+echo
+echo "AndyView Balance for Project $projnum"
+ledger --file $topdir/journals/$projnum\_itd_jnl.journal bal --depth $depth AndyView:Expenses
+done
+echo
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+AndyView Balance for Project 84782200
+          $717584.12  AndyView:Expenses
+           $76967.50    ConsultingServices
+            $2996.90    Other
+          $593017.35    Salary
+           $25265.83    Supplies
+           $19336.54    Travel
+--------------------
+          $717584.12
+
+AndyView Balance for Project 84782201
+           $66389.85  AndyView:Expenses
+           $16200.00    ConsultingServices
+             $432.51    Other
+           $47282.87    Salary
+            $1022.38    Supplies
+            $1452.09    Travel
+--------------------
+           $66389.85
+
+AndyView Balance for Project 84782202
+           $14868.03  AndyView:Expenses
+           $11519.64    Salary
+            $3348.39    Travel
+--------------------
+           $14868.03
+
+#+end_example
+
+* view itd journal using hledger
+#+NAME hle_projnum
+#+BEGIN_SRC sh :results verbatim :var projnum=84782200
+echo "hledger startup"
+hledger-web -f  $topdir/journals/$projnum\_ipb_jnl.journal
+done
+echo
+#+END_SRC
+
+#+RESULTS:
+
+* TODOS
+** make scripts work with subpoints
+** name awkscripts for project root (first 6 numbers) instead of full project number
+** consider using aliases during rendering w hledger rather than virtual accounts
+** go over account structure w  scientist and someone from accounting
+
+** refactor filenaming convention
+- <identifying-words>_<data-time-period>_<workflow-stage-code>_<data-type-code>-<file-closed-timestamp>.<file-type-extension>*
+
+** checkout NSFView mappings w Helen
+* Reviewers
+
+** Questions (take out to lunch)
+- What are your biggest FSR headaches
+- What do you think of some of these views, how would you change this?
+- How many templates do you think we would need to cover most of WHOI
+- 2-3 Powerpoints
+  - Goals of ours
+  - What WHOI provides now
+  - What we are thinking of
+** Alison Kline - GBMF View
+** Larry Flick - old spreadsheets around?
+** Anita Norton - works with lots of projects
+** (Ann Stone)
+** Karen Schwamb
+** Helen Gordon
+ 

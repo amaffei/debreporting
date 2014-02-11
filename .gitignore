@@ -1,0 +1,8 @@
+*~
+#.*#
+downloads/*_dwn_*
+journals/*_jnl.journal
+data/*_cln.csv
+data/*_raw.csv
+data/*_csv.csv
+downloads/pdf

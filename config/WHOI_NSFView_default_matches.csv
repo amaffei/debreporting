@@ -1,0 +1,36 @@
+M_Col1,M_Str1,M_Col2,M_Str2,WHOIView,NSFView
+ExpCode,*,,,9999 Unassigned,Z. Unassigned
+ExpCode,5010,,,5010 Salaries - Regular,C. Total Salary and Benefits
+ExpCode,5012,,,5012 Salaries-Paid Absences,C. Total Salary and Benefits
+ExpCode,5015,,,5015 Salaries-Casual,C. Total Salary and Benefits
+ExpCode,5050,,,5050 Fringe Benefits Regular,C. Total Salary and Benefits
+ExpCode,5054,,,5054 Fringe Benefits-Casual,C. Total Salary and Benefits
+ExpCode,5060,,,5060 Lab Costs Regular,I. Indirect Costs:1. Lab Costs
+ExpCode,5066,,,5066 Laboratory Costs - Casual,I. Indirect Costs:1. Lab Costs
+ExpCode,5100,,,5100 Elec/Mech/Carp. shop services,G. Other Direct Costs:3. Shop Services
+ExpCode,5130,,,5130 Graphics shop services,G. Other Direct Costs:2. Publication
+ExpCode,5170,,,5170 Travel - Domestic,E. Travel:1. Domestic
+ExpCode,5171,,,5171 Train Seminar fees on&off site,E. Travel:3. Seminar Fees
+ExpCode,5180,,,5180 Travel - International,E. Travel:2. Foreign
+ExpCode,5190,,,5190 Equipment,D. Equipment
+ExpCode,5200,,,5200 Membership Fees,G. Other Direct Costs:6. Other:Membership Fees
+ExpCode,5210,,,5210 Supplies,G. Other Direct Costs:1. Materials and Supplies
+ExpCode,5211,,,5211 Computer Software,G. Other Direct Costs:1. Materials and Supplies
+ExpCode,5212,,,5212 Computer Supples,G. Other Direct Costs:1. Materials and Supplies
+ExpCode,5220,,,5220 Books & Publications,G. Other Direct Costs:6. Other:Books and Publications
+ExpCode,5250,,,5250 Stockroom Supplies,G. Other Direct Costs:1. Materials and Supplies
+ExpCode,5290,,,5290 Meals,G. Other Direct Costs:6. Other:Meals
+ExpCode,5310,,,5310 Other Outside Services,G. Other Direct Costs:5. Subawards:Unassigned
+ExpCode,5320,,,5320 Consulting Services,G. Other Direct Costs:3. Consultant Services
+ExpCode,5360,,,5360 Communications,G. Other Direct Costs:6. Other:Communications
+ExpCode,5370,,,5370 Shipping & Postage,G. Other Direct Costs:6. Other:Shipping and Postage
+ExpCode,5389,,,5389 Miscellaneous In-house Service,G. Other Direct Costs:6. Other:Misc In-house Service
+ExpCode,5390,,,5390 Printing & Binding,G. Other Direct Costs:2. Publication Costs/Documentation/Dissemination
+ExpCode,5410,,,5410 Miscellaneous,G. Other Direct Costs:6. Other:Miscellaneous
+ExpCode,5430,,,5430 Duplicating,G. Other Direct Costs:6. Other:Duplicating
+ExpCode,5510,,,5510 Technical Assistance,G. Other Direct Costs:4. Computer Services
+ExpCode,5550,,,5550 Publication Costs,G. Other Direct Costs:2. Publication Costs
+ExpCode,5750,,,5750 Guest Payments,F. Participant Support Costs
+ExpCode,5960,,,5960 G & A Regular,I. Indirect Costs:2. General and Administrative
+ExpCode,5970,,,5970 Cost Sharing,M. Cost Sharing
+ExpCode,5966,,,5966 G&A Overhead-Casual,I. Indirect Costs:2. General and Administrative

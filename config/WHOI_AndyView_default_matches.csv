@@ -1,0 +1,36 @@
+M_Col1,M_Str1,M_Col2,M_Str2,WHOIView,AndyView
+ExpCode,*,,,0000 Unassigned,Expenses:Unassigned
+ExpCode,5010,,,5010 Salaries - Regular,Expenses:Salary:Regular
+ExpCode,5012,,,5012 Salaries-Paid Absences,Expenses:Salary:PaidAbsence
+ExpCode,5015,,,5015 Salaries-Casual,Expenses:Salary:Casual
+ExpCode,5050,,,5050 Fringe Benefits Regular,Expenses:Salary:BenefitsRegular
+ExpCode,5054,,,5054 Fringe Benefits-Casual,Expenses:Salary:BenifitsCasual
+ExpCode,5060,,,5060 Lab Costs Regular,Expenses:Salary:LabCostsRegular
+ExpCode,5066,,,5066 Laboratory Costs - Casual,Expenses:Salary:LabCostsCasual
+ExpCode,5100,,,5100 Elec/Mech/Carp. shop services,Expenses:Other:ElecMechCarp
+ExpCode,5130,,,5130 Graphics shop services,Expenses:Other:Graphics
+ExpCode,5170,,,5170 Travel - Domestic,Expenses:Travel:Unassigned
+ExpCode,5171,,,5171 Train Seminar fees on&off site,Expenses:Other:Training
+ExpCode,5180,,,5180 Travel - International,Expenses:Travel:Unassigned
+ExpCode,5190,,,5190 Equipment,Expenses:Equipment:Unassigned
+ExpCode,5200,,,5200 Membership Fees,Expenses:Other:Membership Fees
+ExpCode,5210,,,5210 Supplies,Expenses:Supplies:Misc
+ExpCode,5211,,,5211 Computer Software,Expenses:Supplies:Computer Software
+ExpCode,5212,,,5212 Computer Supples,Expenses:Supplies:Computer Supplies
+ExpCode,5220,,,5220 Books & Publications,Expenses:Other:Books
+ExpCode,5250,,,5250 Stockroom Supplies,Expenses:Other:Stockroom
+ExpCode,5290,,,5290 Meals,Expenses:Other:Meals
+ExpCode,5310,,,5310 Other Outside Services,Expenses:Outside Services:Unassigned
+ExpCode,5320,,,5320 Consulting Services,Expenses:Outside Servixes:Unassigned
+ExpCode,5360,,,5360 Communications,Expenses:Other:Communications
+ExpCode,5370,,,5370 Shipping & Postage,Expenses:Other:Shipping
+ExpCode,5389,,,5389 Miscellaneous In-house Service,Expenses:Other:MiscInhouseServ
+ExpCode,5390,,,5390 Printing & Binding,Expenses:Other:Printing
+ExpCode,5410,,,5410 Miscellaneous,Expenses:Other:Misc
+ExpCode,5430,,,5430 Duplicating,Expenses:Other:Duplicating
+ExpCode,5510,,,5510 Technical Assistance,Expenses:Salary:TA
+ExpCode,5550,,,5550 Publication Costs,Expenses:Other:PubCosts
+ExpCode,5750,,,5750 Guest Payments,Expenses:GuestPayments
+ExpCode,5960,,,5960 G & A Regular,Expenses:Salary:GandA
+ExpCode,5966,,,5966 G&A Overhead-Casual,Expenses:Salary:GandA
+ExpCode,5970,,,5970 Cost Sharing,Expenses:CostSharing

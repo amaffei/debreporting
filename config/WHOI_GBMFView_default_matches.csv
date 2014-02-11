@@ -1,0 +1,36 @@
+M_Col1,M_Str1,M_Col2,M_Str2,WHOIView,GBMFView
+ExpCode,*,,,0000 Unassigned,Unassigned
+ExpCode,5010,,,5010 Salaries - Regular,Labor and Benefits
+ExpCode,5012,,,5012 Salaries-Paid Absences,Labor and Benefits
+ExpCode,5015,,,5015 Salaries-Casual,Labor and Benefits
+ExpCode,5050,,,5050 Fringe Benefits Regular,Labor and Benefits
+ExpCode,5054,,,5054 Fringe Benefits-Casual,Labor and Benefits
+ExpCode,5060,,,5060 Lab Costs Regular,Indirect Costs:Lab Costs
+ExpCode,5066,,,5066 Laboratory Costs - Casual,Indirect Costs:Lab Costs
+ExpCode,5100,,,5100 Elec/Mech/Carp. shop services,Other Direct Costs:Other:Shop
+ExpCode,5130,,,5130 Graphics shop services,Other Direct Costs:Other:Shop
+ExpCode,5170,,,5170 Travel - Domestic,Travel:Domestic:Unassigned
+ExpCode,5171,,,5171 Train Seminar fees on&off site,Travel:Domestic:SeminarFee
+ExpCode,5180,,,5180 Travel - International,Travel:International:Unassigned
+ExpCode,5190,,,5190 Equipment,Equipment:Unassigned
+ExpCode,5200,,,5200 Membership Fees,Other Direct Costs:Other:Membership Fees
+ExpCode,5210,,,5210 Supplies,Other Direct Costs:Materials and Supplies
+ExpCode,5211,,,5211 Computer Software,Other Direct Costs:Materials and Supplies:CompSoftware
+ExpCode,5212,,,5212 Computer Supples,Other Direct Costs:Materials and Supplies:CompSupplies
+ExpCode,5220,,,5220 Books & Publications,Other Direct Costs:Materials and Supplies:Books
+ExpCode,5250,,,5250 Stockroom Supplies,Other Direct Costs:Materials and Supplies:Stockroom
+ExpCode,5290,,,5290 Meals,Other Direct Costs:Other:Meals
+ExpCode,5310,,,5310 Other Outside Services,Other Direct Costs:Other:OtherOutServ
+ExpCode,5320,,,5320 Consulting Services,Other Direct Costs:Other:OtherOutServ
+ExpCode,5360,,,5360 Communications,Other Direct Costs:Other:Communications
+ExpCode,5370,,,5370 Shipping & Postage,Other Direct Costs:Other:Shipping
+ExpCode,5389,,,5389 Miscellaneous In-house Service,Other Direct Costs:Other:MiscInhouseServ
+ExpCode,5390,,,5390 Printing & Binding,Other Direct Costs:Other:Printing
+ExpCode,5410,,,5410 Miscellaneous,Other Direct Costs:Other:Misc
+ExpCode,5430,,,5430 Duplicating,Other Direct Costs:Other:Duplicating
+ExpCode,5510,,,5510 Technical Assistance,Other Direct Costs:Computer Services
+ExpCode,5550,,,5550 Publication Costs,Other Direct Costs:Other:PubCosts
+ExpCode,5750,,,5750 Guest Payments,Other Direct Costs:GuestPayments
+ExpCode,5960,,,5960 G & A Regular,Indirect Costs:GandA
+ExpCode,5966,,,5966 G&A Overhead-Casual,Indirect Costs:GandA
+ExpCode,5970,,,5970 Cost Sharing,Cost Sharing

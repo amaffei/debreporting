@@ -1,0 +1,477 @@
+#+PROPERTY: var topdir="/Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822" entity="whoi" program="r2r" projroot="847822" subpoints="00 01 02" period="ifas"
+
+* File naming syntax
+Data files are all names using the following scheme:
+*<projnum>_<data-type>_<workflow-stage>_<period><-timestamp>.<extension>*
+- *projnum* is the 8-digit WHOI project number in format nnnnnnss
+  - *nnnnnn* is base account number
+  - *ss* is account subcode
+- *data-type* is the type of data provided by FSR system as csv, etc.
+  - *fsr* is project financial summary report
+  - *itd* is iteration to date transactions for the project
+  - *ppi* are the per-person hours charged to the project
+  - *enc* are the encumberances held against the project
+  - *ipb* combined itd, ppi, and gpg (Budget) transactions
+  - *acc* are accountnames that all transactions are mapped to
+- *workflow-stage* is the stage of processing that created the file 
+  - *emp* - nothing done, the start
+  - *dwn* - download stage
+  - *raw* - download-to-rawdata stage
+  - *prc* - raw data post-processing stage
+  - *trn* - journal transaction conversion stage
+- *period* is the period of time the data represents and is one of following
+  - *current* is for the last closed months finances
+  - *ifas* is for real-time finances
+  - *yyyymm* is for closed month as indicated
+- *-timestamp* is a timestamp in form -yyyymmdd of when data was collected
+- *extension* indicates file format as follows
+  - *html* - HTML source
+  - *csv* - comma separated values
+  - *pdf* - pdf printable format
+  - *ledger* - ledger format
+
+* Account Mapping Tables
+#+NAME default_expcode_table
+|----------------+----------------------------+-------------------------------|
+| FsrExpenseCode | AndyView:Expenses          | GBMFView                      |
+|----------------+----------------------------+-------------------------------|
+|        default | Unassigned                 | Unassigned                    |
+|           5010 | Salary:Regular             | Labor and Benefits            |
+|           5012 | Salary:PaidAbsence         | Labor and Benefits            |
+|           5015 | Salary:Casual              | Labor and Benefits            |
+|           5050 | Salary:BenefitsRegular     | Labor and Benefits            |
+|           5054 | Salary:BenifitsCasual      | Labor and Benefits            |
+|           5060 | Salary:LabCostsRegular     | Indirect Costs:Lab Costs      |
+|           5066 | Salary:LabCostsCasual      | Indirect Costs:Lab Costs      |
+|           5100 | Other:ElecMechCarp         | Other Direct Costs:Other:Shop |
+|           5130 | Other:Graphics             | Other Direct Costs:Other:Shop |
+|           5170 | Travel:Unassigned:Domestic | Travel:Domestic:Unassigned    |
+|                |                            |                               |
+|----------------+----------------------------+-------------------------------|
+
+#+NAME 847822_projfamily_match_table
+|---------+----------+----------+-----------------------+---------------------------------------|
+| ExpCode | CSVField | StrMatch | AndyView:Expenses     | GBMFView                              |
+|---------+----------+----------+-----------------------+---------------------------------------|
+|    5170 | FsrDesc  | AMAFF    | Travel:AndyM:Domestic | Travel:Domestic:AndyM                 |
+|    5170 | FsrDesc  | MAFFEI   | Travel:AndyM:Domestic | Travel:Domestic:AndyM                 |
+|    5170 | FsrDesc  | SHEPHERD | Travel:AdamS:Domestic | Travel:Domestic:AdamS                 |
+|    5510 | FsrPEID  | 05550    | Salary:TA:AndyM       | Other Direct Costs:Computer Svc:AndyM |
+|         |          |          |                       |                                       |
+|---------+----------+----------+-----------------------+---------------------------------------|
+
+#+NAME WHOIPrSourcePrefix
+|----------+--------|
+|   Prefix | Agency |
+|----------+--------|
+| 84xxxxxx | NSF    |
+| 25xxxxxx |        |
+|----------+--------|
+
+* test shell variable passing
+In the following script we test variable passing. This section can go away eventually.
+#+NAME: test_shell_variable_passing
+#+BEGIN_SRC sh :results verbatim :var period="ifas" fsrurlprefix="http://fsr2.whoi.edu/servlet/fsrreport/ifas/2/grp/JL/" httpuser="arm" httppass="Wh135=justfine" downloadresults="~/Downloads"
+
+ddir=$topdir/downloads
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+echo $projnum
+done
+
+#+END_SRC
+
+#+RESULTS: test_shell_variable_passing
+: 84782200
+: 84782201
+: 84782202
+
+
+* download fsr summary and detail from accounting website and overwrite old files
+FSR reports display the state of an account at various points in time.
+In this code block we gather various formats for both the summary FSR report and
+the detailed transactions.
+#+NAME: dwn_fsritd
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine" 
+
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# Downloads
+
+#FSR summary in PDF and CSV
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrmakepdf/$period/2/grp/JL/$projnum.pdf?method=report -O ./downloads/pdf/$projnum\_fsr_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrreport/$period/2/grp/JL/$projnum.csv -O ./downloads/$projnum\_fsr_dwn_$period\-$datestring.csv
+sleep 5
+
+# FSR ITD detail in PDF and CSV
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=itd -O ./downloads/pdf/$projnum\_itd_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=itd -O ./downloads/$projnum\_itd_dwn_$period\-$datestring.csv
+sleep 5
+
+echo "downloaded $projnum FSR summary and ITD files for period $period on date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn_fsritd
+: downloaded 84782200 FSR summary and ITD files for period ifas on date 20140104
+: downloaded 84782201 FSR summary and ITD files for period ifas on date 20140104
+: downloaded 84782202 FSR summary and ITD files for period ifas on date 20140104
+
+* download fsr ppi detail for year
+Information on hours charged to a project is posted monthly. There is no singly report
+that provides all the monthly hours charged to a project. Therefore in the code
+block below we gather the reports for every month. This script can be optimized
+to only gather months up until the current month at some point.
+#+NAME: dwn_ppi
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine" year=2013
+
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+#FSR PPI detail in CSV
+#for i in 01 02 03 04 05 06 07 08 09 10 11 12
+for i in 11 12
+do
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$year$i/2/grp/JL/$projnum.pdf?col=ppi -O ./downloads/pdf/$projnum\_ppi_dwn_$year$i\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$year$i/2/grp/JL/$projnum.csv?col=ppi -O ./downloads/$projnum\_ppi_dwn_$year$i\-$datestring.csv
+sleep 5
+done
+
+echo "downloaded $projnum PPI info on date $datestring"
+
+done
+#+END_SRC
+
+#+RESULTS: dwn_ppi
+: downloaded 84782200 PPI info on date 20140104
+: downloaded 84782201 PPI info on date 20140104
+: downloaded 84782202 PPI info on date 20140104
+
+* download other fsr report details
+This code block downloads budget and encumberance details for the project. We use "ifas" as the
+period but it appears that any period returns the same results -- an ITD list
+of budget entries from the start of the project.
+#+NAME: dwn_gpgen
+#+BEGIN_SRC sh :results verbatim :var httpuser="arm" httppass="Wh135-justfine"
+#Go to the datadirectory
+cd $topdir
+
+# Initialize variables
+wgetprefix="wget --http-user=$httpuser --http-password=$httppass"
+datestring=`date "+%Y%m%d"`
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# Budget details
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=gbg -O ./downloads/pdf/$projnum\_gpg_dwn_$period\-$datestring.pdf
+sleep 5
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=gbg -O ./downloads/$projnum\_gpg_dwn_$period\-$datestring.csv
+sleep 5
+
+# Encumberance details
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.pdf?col=en -O ./downloads/pdf/$projnum\_enc_dwn_$period\-$datestring.pdf
+$wgetprefix http://fsr2.whoi.edu/servlet/fsrdetail/$period/2/grp/JL/$projnum.csv?col=en -O ./downloads/$projnum\_enc_dwn_$period\-$datestring.csv
+
+echo "downloaded $projnum Budget and Encumberance info on date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn_gpgen
+: downloaded 84782200 Budget and Encumberance info on date 20140104
+: downloaded 84782201 Budget and Encumberance info on date 20140104
+: downloaded 84782202 Budget and Encumberance info on date 20140104
+
+* copy downloaded data from specific data and period to data directory
+Here we update all the raw files in the data directory with fresh versions.
+#+NAME: dwn2raw
+#+BEGIN_SRC sh :results verbatim :var datestring=20140104
+
+# IMPORTANT!!!!!!!!!! --> SET DATESTRING BEFORE EXECUTING THIS!!!!!!!
+
+# Need to make sure that data for today has been downloaded since this script
+# picks up data collected on todays date
+
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# copy fsr summary and detail files up one level
+cp ./downloads/$projnum\_fsr\_dwn_$period\-$datestring.csv ./data/$projnum\_fsr_raw.csv
+cp ./downloads/$projnum\_itd\_dwn_$period\-$datestring.csv ./data/$projnum\_itd_raw.csv
+cp ./downloads/$projnum\_enc\_dwn_$period\-$datestring.csv ./data/$projnum\_enc_raw.csv
+cp ./downloads/$projnum\_gpg\_dwn_$period\-$datestring.csv ./data/$projnum\_gpg_raw.csv
+
+# concatenate all the ppi files into one ppi file for entire year
+cat ./downloads/$projnum\_ppi_dwn_*-$datestring.csv > ./data/$projnum\_ppi_raw.csv
+
+echo "copied $projnum data from period $period downloaded files to data dir date $datestring"
+
+done
+
+#+END_SRC
+
+#+RESULTS: dwn2raw
+: copied 84782200 data from period ifas downloaded files to data dir date 20140104
+: copied 84782201 data from period ifas downloaded files to data dir date 20140104
+: copied 84782202 data from period ifas downloaded files to data dir date 20140104
+
+* cook the raw data files
+For the time being we basically copy the raw files to cooked files.
+In the future each of the raw files, downloaded from the accounting system
+will be transformed into a CSV capable of being imported into the ledger
+software, attaching a UUID to each transaction as it is created. The
+difficutly at present is that multiple virtual accounts have to be assigned
+to each transaction. gawk is a better tool for this currently.
+
+#+NAME: raw2prc
+#+BEGIN_SRC sh :results verbatim
+
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# for now just copy raw files to processed (prc) files
+cp ./data/$projnum\_fsr_raw.csv ./data/$projnum\_fsr_prc.csv
+cp ./data/$projnum\_itd_raw.csv ./data/$projnum\_itd_prc.csv
+cp ./data/$projnum\_ppi_raw.csv ./data/$projnum\_ppi_prc.csv
+cp ./data/$projnum\_enc_raw.csv ./data/$projnum\_enc_prc.csv
+cp ./data/$projnum\_gpg_raw.csv ./data/$projnum\_gpg_prc.csv
+
+date; echo "raw2prc performed for $projnum"
+
+done
+
+#+END_SRC
+
+#+RESULTS: raw2prc
+: Sat Jan  4 21:07:29 EST 2014
+: raw2prc performed for 84782200
+: Sat Jan  4 21:07:29 EST 2014
+: raw2prc performed for 84782201
+: Sat Jan  4 21:07:29 EST 2014
+: raw2prc performed for 84782202
+
+* gawk cooked data files into ledger-compatible transactions
+In this step we create ledger-compatible journal files from the cooked
+data files and place them in the journals subdirectory. A series of project-specific
+gawk scripts, sitting in the scripts directory, are used for this purpose. At some
+point we may want to have a global gawk script that calls a local gawk script at
+the end of it.
+
+#+NAME: prc2trn
+#+BEGIN_SRC sh :results verbatim
+# Go to the datadirectory
+cd $topdir
+date
+for i in $subpoints
+do
+projnum=$projroot$i
+
+# ITD file into ledger file and sort journal
+#gawk -f ./scripts/$projroot\_itd_prc2trn.awk ./data/$projnum\_itd_prc.csv | ledger print --file - --sort d > ./journals/$projnum\_itd_trn.journal
+
+# PPI file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_ppi_prc2trn.awk ./data/$projnum\_ppi_prc.csv | ledger print --file - --sort d > ./journals/$projnum\_ppi_trn.journal
+
+# GPG file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_gpg_prc2trn.awk ./data/$projnum\_gpg_prc.csv | ledger print --file - --sort d > ./journals/$projnum\_gpg_trn.journal
+
+# GPG file into ledger file and sort journal
+#gawk --file=./scripts/$projroot\_enc_prc2trn.awk ./data/$projnum\_enc_prc.csv | ledger print --file - --sort d > ./journals/$projnum\_enc_trn.journal
+gawk --file=./scripts/$projroot\_enc_prc2trn.awk ./data/$projnum\_enc_prc.csv | ledger print --file - --sort d 
+
+
+# Combine all 3 into a single (i)nception-to-date + (p)eople + (b)udger transaction file
+cat ./journals/$projnum\_{itd,gpg,ppi}_trn.journal > ./journals/$projnum\_ipb_trn.journal
+
+echo "ledger files created for $projnum"
+
+done
+
+# Create projroot ledger files and sort 
+cat ./journals/$projroot[0-9][0-9]_itd_trn.journal | ledger print --file - --sort d > ./journals/$projroot\_itd_trn.journal
+cat ./journals/$projroot[0-9][0-9]_ppi_trn.journal | ledger print --file - --sort d > ./journals/$projroot\_ppi_trn.journal
+cat ./journals/$projroot[0-9][0-9]_gpg_trn.journal | ledger print --file - --sort d > ./journals/$projroot\_gpg_trn.journal
+cat ./journals/$projroot[0-9][0-9]_ipb_trn.journal | ledger print --file - --sort d > ./journals/$projroot\_ipb_trn.journal
+echo "concatenated ledger files"
+
+# Create new accounts file listing all accounts used
+ledger --file ./journals/$projroot\_itd_trn.journal accounts | sed -e "s/^/account /" | sort > ./journals/$projroot\_acc_trn.journal
+#+END_SRC
+
+#+RESULTS: prc2trn
+: Sun Jan  5 12:25:42 EST 2014
+: ledger files created for 84782200
+: ledger files created for 84782201
+: ledger files created for 84782202
+: concatenated ledger files
+
+* report hours people worked on project 
+#+NAME rep_hours
+#+BEGIN_SRC sh :results verbatim :var projnum=847822
+ledger --file $topdir/journals/$projnum\_ppi_trn.journal bal
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+                   0  84782200
+      -1645.50 Hours    Assets:WorkHours:Assets:Fund:Regular
+       1645.50 Hours    Expenses:WorkHours
+         70.00 Hours      CHANDLER:Regular
+         15.00 Hours      HUNTINGTON:Regular
+         34.00 Hours      LERNER:Regular
+        262.00 Hours      NOBRE:Regular
+       1046.50 Hours      SELLERS:Regular
+        218.00 Hours      STOLP:Regular
+                   0  84782201
+         -4.00 Hours    Assets:WorkHours:Assets:Fund:Regular
+          4.00 Hours    Expenses:WorkHours:CHANDLER:Regular
+                   0  84782202
+        -23.00 Hours    Assets:WorkHours:Assets:Fund:Regular
+         23.00 Hours    Expenses:WorkHours:CHANDLER:Regular
+--------------------
+                   0
+#+end_example
+
+
+* report balance of funds on project
+#+NAME rep_AndyView
+#+BEGIN_SRC sh :results verbatim :var depth=3
+
+for i in $subpoints
+do
+projnum=$projroot$i
+echo
+echo "AndyView Balance for Project $projnum"
+ledger --file $topdir/journals/$projnum\_itd_trn.journal bal --depth $depth AndyView:Expenses
+done
+echo
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+AndyView Balance for Project 84782200
+          $717584.12  AndyView:Expenses
+           $76967.50    ConsultingServices
+            $2996.90    Other
+          $593017.35    Salary
+           $25265.83    Supplies
+           $19336.54    Travel
+--------------------
+          $717584.12
+
+AndyView Balance for Project 84782201
+           $66389.85  AndyView:Expenses
+           $16200.00    ConsultingServices
+             $432.51    Other
+           $47282.87    Salary
+            $1022.38    Supplies
+            $1452.09    Travel
+--------------------
+           $66389.85
+
+AndyView Balance for Project 84782202
+           $14868.03  AndyView:Expenses
+           $11519.64    Salary
+            $3348.39    Travel
+--------------------
+           $14868.03
+
+#+end_example
+
+* view itd journal using hledger
+#+NAME hle_projnum
+#+BEGIN_SRC sh :results verbatim :var projnum=84782200
+echo "hledger startup"
+hledger-web -f  $topdir/journals/$projnum\_ipb_trn.journal
+done
+echo
+#+END_SRC
+
+#+RESULTS:
+
+
+* Specifications for Steve
+** scripts/whoi_itd_raw2trn.sh
+#+NAME: whoi_itd_raw2prc
+#+BEGIN_SRC sh :results verbatim  :var topdir="/Users/drumbeat/Contracts/METVC/TVCLLC/NICEFSRS2/whoi_r2r_847822" projroot="847822" subpoints="00 01 02" period="ifas"
+# Go to the datadirectory
+cd $topdir
+
+for i in $subpoints
+do
+projnum=$projroot$i
+./whoi_itd_raw2prc.pl ./data/$projnum_itd_raw_$period.csv > ./data/$projnum_itd_prc_$period.csv
+./whoi_itd_prc2trn.pl < ./data/$projnum_itd_prc
+done
+#+END_SRC
+
+** scripts/whoi_itd_raw2prc.pl
+*** inputs
+- *downloads/<projnum>_itd_dwn_<period>-<download-date>.csv* - a financial report, in CSV format, generated by the WHOI financial system. Includes all iteration-to-date transactions up to the date <period>. Has possible embedded quotes in comma separated fields and has a mix of CSV record types.
+*** output
+- *data/<projnum>_itd_prc_<period>.csv* - a proper CSV file, cleaned up. It includes many of the same fields as the original file. It reformats some of the fields and  prepends FsrExpCode at the start of the fieldlist. Theoretically, this new CSV file could be ingested by the ledger or hledger programs. For the timebeing, however, it is destined to be processed by the scripts/whoi_itd_prc2trn.pl scipt (see below)
+- *data/<projnum>_acc_prc_<period>.csv* - a CSV file with 3 fields -- FsrExpCode, FsrExpName, FsrExpSubtotal. These are derived from the FsrCode records in the input file
+*** processing
+1. read the input file in sequentially so that FsrExpCode and FsrExpName can be prepended to the remaining rows. See awk script scripts/847822_itd_prc2trn.awk to see how I extracted FsrExpCode and FsrExpName using awk. This awk script does both the raw2prn and prn2trn transforms. The new method will be to separate these funcitons into 2 scripts -- whoi_gpg_raw2prc.pl (this one) and whoi_gpg_prc2trn.pl (described below)
+*** output csv file field definitions (ordered)
+- *FsrExpCode* - WHOI 4-digit expense code (ex. 5010)
+- *FsrExp
+** scripts/whoi_gpg_prc2trn.pl
+* TODOS
+** make scripts work with subpoints
+** name awkscripts for project root (first 6 numbers) instead of full project number
+** consider using aliases during rendering w hledger rather than virtual accounts
+** go over account structure w  scientist and someone from accounting
+
+* Reviewers
+
+** Questions (take out to lunch)
+- What are your biggest FSR headaches
+- What do you think of some of these views, how would you change this?
+- How many templates do you think we would need to cover most of WHOI
+- 2-3 Powerpoints
+  - Goals of ours
+  - What WHOI provides now
+  - What we are thinking of
+** Alison Kline - GBMF View
+** Larry Flick - old spreadsheets around?
+** Anita Norton - works with lots of projects
+** (Ann Stone)
+** Karen Schwamb
